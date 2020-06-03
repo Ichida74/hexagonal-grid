@@ -1,0 +1,350 @@
+<html lang="ru">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <title>Полижай В. А.: Задание на разработчика JavaScript</title>
+        <script src="react.js"></script>
+        <script src="react-dom.js"></script>
+        <script src="babel.js"></script>
+
+        <link rel="stylesheet" href="style.css">
+    </head>
+
+    <body>
+        <div id="root"></div>
+
+        <script type="text/babel">
+          const rootElement = document.getElementById('root');
+
+          const App = () => {
+            const [hexagonSize, setHexagonSize] = React.useState({l: 1, n: 1, m: 1});
+            const [hexagonGrid, setHexagonGrid] = React.useState(null);
+            const [domainsDetails, setDomainsDetails] = React.useState({count: null});
+            const [probability, setProbability] = React.useState(0.01);
+            const [autoGenerateResults, setAutoGenerateResults] = React.useState([]);
+
+            const changeHexagonSizeL = React.useCallback(_l => {
+              setHexagonSize({...hexagonSize, l: _l});
+            }, [hexagonSize, setHexagonSize]);
+
+            const changeHexagonSizeN = React.useCallback(_n => {
+              setHexagonSize({...hexagonSize, n: _n});
+            }, [hexagonSize, setHexagonSize]);
+
+            const changeHexagonSizeM = React.useCallback(_m => {
+              setHexagonSize({...hexagonSize, m: _m});
+            }, [hexagonSize, setHexagonSize]);
+
+            const generateHexagonalGrid = React.useCallback(() => {
+              if (hexagonSize.l >= 1 && hexagonSize.l <= 30 && hexagonSize.n >= 1 && hexagonSize.n <= 30 && hexagonSize.m >= 1 && hexagonSize.m <= 30) {
+                const countHexagonRows = hexagonSize.l + hexagonSize.m - 1,
+                      maxHexagonWidth = hexagonSize.n + Math.ceil(Math.min(hexagonSize.l, hexagonSize.m)/2);
+
+                let newHexagonGrid = (new Array(countHexagonRows)).fill(0),
+                    rowLength = hexagonSize.n;
+
+                for (let i = 0; i < newHexagonGrid.length; i++) {
+                  const startCol = i < hexagonSize.l ? Math.floor((hexagonSize.l - i - 0.5) * 0.5) : Math.ceil((i - hexagonSize.l) * 0.5);
+
+                  newHexagonGrid[i] = (new Array(maxHexagonWidth)).fill(0);
+                  if (i > 0) {
+                    if (i < hexagonSize.l && i < hexagonSize.m) rowLength++;
+                    else if (i + 1 > hexagonSize.l && i + 1 > hexagonSize.m) rowLength--;
+                  }
+
+                  for (let j = startCol; j < startCol + rowLength; j++) {
+                    newHexagonGrid[i][j] = {selected: false, group: null};
+                  }
+                }
+                setHexagonGrid({size: {l: hexagonSize.l, n:hexagonSize.n, m: hexagonSize.m}, data: newHexagonGrid, type: hexagonSize.l % 2 ? 'even' : 'odd'});
+                setDomainsDetails({count: null});
+              }
+            }, [hexagonSize, setHexagonGrid, setDomainsDetails]);
+
+            const changeHexagonGrid = React.useCallback((i, j) => {
+              let newHexagonGrid = {...hexagonGrid};
+              newHexagonGrid.data[i][j].selected = !newHexagonGrid.data[i][j].selected;
+              setHexagonGrid(newHexagonGrid);
+            }, [hexagonGrid, setHexagonGrid]);
+
+            const calculateDomains = React.useCallback(() => {
+              let newHexagonGridData = [...hexagonGrid.data];
+
+              newHexagonGridData.forEach(row => row.forEach(element => {
+                if (element) element.group = null;
+                return element;
+              }));
+
+              setDomainsDetails(calculateDomainsData(newHexagonGridData, hexagonGrid.type));
+            }, [hexagonGrid, setDomainsDetails]);
+
+            const autoGenerateHexagon = React.useCallback(() => {
+              if (probability >= 0.01 && probability <= 0.99) {
+                let newHexagonGridData = [...hexagonGrid.data],
+                  results = [...autoGenerateResults],
+                  domainsData = {};
+
+                newHexagonGridData.forEach(row => row.forEach(element => {
+                  if (element) {
+                    element.selected = Math.random() <= probability;
+                    element.group = null;
+                  }
+                  return element;
+                }));
+
+                domainsData = calculateDomainsData(newHexagonGridData, hexagonGrid.type);
+                setDomainsDetails(domainsData);
+                results.push({probability: probability, domains: domainsData.count, notSimpleDomains: domainsData.count - domainsData.simple, hexagonSize: hexagonGrid.size, cells: domainsData.cells});
+                setAutoGenerateResults(results.slice(-10));
+              }
+            }, [hexagonGrid, autoGenerateResults, setAutoGenerateResults, setDomainsDetails, probability]);
+
+            return(
+              <div className="content">
+                <div className="center">
+                  <InitHexagonForm
+                    hexagonSize={hexagonSize}
+                    changeHexagonSizeL={changeHexagonSizeL}
+                    changeHexagonSizeN={changeHexagonSizeN}
+                    changeHexagonSizeM={changeHexagonSizeM}
+                    generateHexagonalGrid={generateHexagonalGrid}
+                  />
+                </div>
+                {hexagonGrid && (
+                  <div>
+                    {domainsDetails.count !== null ? <p className="domains_count">Количество доменов: <strong>{domainsDetails.count}</strong></p> : null}
+                    <div className="center">
+                      <HexagonGrid grid={hexagonGrid} changeHexagonGrid={changeHexagonGrid} />
+                    </div>
+                    <div className="center">
+                      <div className="form">
+                        <button className="btn btn-blue" onClick={calculateDomains}>Посчитать домены</button>
+                      </div>
+                    </div>
+                    <div className="center">
+                      <AutoGenerateHexagonForm
+                        probability={probability}
+                        setProbability={setProbability}
+                        onSubmit={autoGenerateHexagon}
+                      />
+                    </div>
+                    <AutoGenerateResultTable autoGenerateResults={autoGenerateResults} />
+                  </div>
+                )}
+              </div>
+            )
+          };
+
+          // Components
+          const InitHexagonForm = (props) => {
+            const {hexagonSize, changeHexagonSizeL, changeHexagonSizeN, changeHexagonSizeM, generateHexagonalGrid} = props;
+
+            return (
+              <div className="form">
+                <InputTypeNumber label="L:" name="l" value={hexagonSize.l} onChange={changeHexagonSizeL} min={1} max={30} step={1} />
+                <InputTypeNumber label="N:" name="n" value={hexagonSize.n} onChange={changeHexagonSizeN} min={1} max={30} step={1} />
+                <InputTypeNumber label="M:" name="m" value={hexagonSize.m} onChange={changeHexagonSizeM} min={1} max={30} step={1} />
+                <button className="btn btn-blue" onClick={generateHexagonalGrid}>Сгенерировать решетку</button>
+              </div>
+            )
+          };
+
+          const InputTypeNumber = (props) => {
+            const {label, name, value, onChange, min, max, step} = props;
+
+            return (
+              <div className="form_element">
+                <div className="form_element_input">
+                  <label htmlFor={name}>{label}</label>
+                  <input id={name} type="number" value={value} min={min} max={max} step={step} onChange={event => {onChange(+event.target.value)}} />
+                </div>
+                {!(value >= min && value <= max) ? <div className="form_element_error">Значение должно быть между {min} и {max} включительно</div> : null}
+              </div>
+            )
+          };
+
+          const HexagonGrid = (props) => {
+            const {grid: {data, type}, changeHexagonGrid} = props;
+
+            let hexagonRows = [];
+            for (let i = 0; i < data.length; i++) {
+              let hexagonRowCells = [];
+              for (let j = 0; j < data[i].length; j++) {
+                if (data[i][j]) hexagonRowCells.push(<HexagonGridCell group={data[i][j].group} selected={data[i][j].selected} data-col={j} key={j} onClick={() => changeHexagonGrid(i, j)} />)
+              }
+              hexagonRows.push(<HexagonGridRow key={i}>{hexagonRowCells}</HexagonGridRow>);
+            }
+
+            return (
+              <div className={`hexagon_grid ${type}`}>
+                  {hexagonRows}
+                </div>
+            );
+          };
+
+          const HexagonGridRow = (props) => {
+            const {children} = props;
+
+            return (
+              <div className="hexagon_grid_row">{children}</div>
+            )
+          };
+
+          const HexagonGridCell = (props) => {
+            const {selected, group, ...other} = props;
+
+            return (
+              <div {...other} className={`hexagon_grid_cell group-${group}`}>{selected && <span className="hexagon_grid_cell_text">1</span>}</div>
+            )
+          };
+
+          const AutoGenerateHexagonForm = (props) => {
+            const {probability, setProbability, onSubmit} = props;
+
+            return (
+              <div className="form">
+                <InputTypeNumber label="Вероятность:" name="probability" value={probability} onChange={setProbability} min={0.01} max={0.99} step={0.01} />
+                <button className="btn btn-blue" onClick={onSubmit}>АВТО</button>
+              </div>
+            )
+          };
+
+          const AutoGenerateResultTable = (props) => {
+            const {autoGenerateResults} = props;
+
+            return autoGenerateResults.length ?
+              (<table>
+                <thead>
+                  <tr>
+                    <th rowSpan="2">Вероятность</th>
+                    <th colSpan="2">Количество доменов в решётке</th>
+                    <th rowSpan="2">Количество ячеек в решётке (L;N;M), из них имеющих значение 1</th>
+                  </tr>
+                  <tr>
+                    <th>Всего</th>
+                    <th>Из них неодносвязных</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {autoGenerateResults.map((element, index) => <tr key={index}>
+                    <td>{element.probability}</td>
+                    <td>{element.domains}</td>
+                    <td>{element.notSimpleDomains}</td>
+                    <td>{`L: ${element.hexagonSize.l}, N: ${element.hexagonSize.n}, M: ${element.hexagonSize.m}, ${element.cells}`}</td>
+                  </tr>)}
+                </tbody>
+              </table>) : null
+          };
+
+          // Helper functions
+          const calculateDomainsData = (hexagonGridData, hexagonGridType) => {
+            let currentGroup = 1,
+                countSimpleDomains = 0,
+                countCells = 0;
+
+            for (let i = 0; i < hexagonGridData.length; i++) {
+              for (let j = 0; j < hexagonGridData[i].length; j++) {
+                if (hexagonGridData[i][j] && hexagonGridData[i][j].selected && hexagonGridData[i][j].group === null) {
+                  let queue = [];
+
+                  hexagonGridData[i][j].group = currentGroup;
+                  countCells += 1 + checkCell(hexagonGridData, hexagonGridType, i, j, currentGroup, queue);
+
+                  if (!queue.length) countSimpleDomains++;
+
+                  while (queue.length) {
+                    const {itemI, itemJ} = queue.pop();
+
+                    countCells += checkCell(hexagonGridData, hexagonGridType, itemI, itemJ, currentGroup, queue);
+                  }
+
+                  currentGroup++;
+                }
+              }
+            }
+
+            return {count: currentGroup - 1, simple: countSimpleDomains, cells: countCells};
+          };
+
+          const checkCell = (hexagonGridData, hexagonGridType, itemI, itemJ, currentGroup, queue) => {
+            let countCells = 0;
+
+            // left neighbors
+            if (hexagonGridData[itemI - 1]) {
+              if ((hexagonGridType === 'even' && itemI % 2 === 0 || hexagonGridType === 'odd' && itemI % 2 === 1) && hexagonGridData[itemI - 1][itemJ - 1] && hexagonGridData[itemI - 1][itemJ - 1].selected && hexagonGridData[itemI - 1][itemJ - 1].group === null) {
+                hexagonGridData[itemI - 1][itemJ - 1].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI - 1, itemJ: itemJ - 1});
+              }
+
+              if ((hexagonGridType === 'even' && itemI % 2 === 1 || hexagonGridType === 'odd' && itemI % 2 === 0) && hexagonGridData[itemI - 1][itemJ] && hexagonGridData[itemI - 1][itemJ].selected && hexagonGridData[itemI - 1][itemJ].group === null) {
+                hexagonGridData[itemI - 1][itemJ].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI - 1, itemJ: itemJ});
+              }
+            }
+
+            if (hexagonGridData[itemI + 1]) {
+              if ((hexagonGridType === 'even' && itemI % 2 === 0 || hexagonGridType === 'odd' && itemI % 2 === 1) && hexagonGridData[itemI + 1][itemJ - 1] && hexagonGridData[itemI + 1][itemJ - 1].selected && hexagonGridData[itemI + 1][itemJ - 1].group === null) {
+                hexagonGridData[itemI + 1][itemJ - 1].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI + 1, itemJ: itemJ - 1});
+              }
+
+              if ((hexagonGridType === 'even' && itemI % 2 === 1 || hexagonGridType === 'odd' && itemI % 2 === 0) && hexagonGridData[itemI + 1][itemJ] && hexagonGridData[itemI + 1][itemJ].selected && hexagonGridData[itemI + 1][itemJ].group === null) {
+                hexagonGridData[itemI + 1][itemJ].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI + 1, itemJ: itemJ});
+              }
+            }
+
+            if (hexagonGridData[itemI][itemJ - 1] && hexagonGridData[itemI][itemJ - 1].selected && hexagonGridData[itemI][itemJ - 1].group === null) {
+              hexagonGridData[itemI][itemJ - 1].group = currentGroup;
+              countCells++;
+              queue.push({itemI: itemI, itemJ: itemJ - 1});
+            }
+
+            // right neighbors
+            if (hexagonGridData[itemI - 1]) {
+              if ((hexagonGridType === 'even' && itemI % 2 === 0 || hexagonGridType === 'odd' && itemI % 2 === 1) && hexagonGridData[itemI - 1][itemJ] && hexagonGridData[itemI - 1][itemJ].selected && hexagonGridData[itemI - 1][itemJ].group === null) {
+                hexagonGridData[itemI - 1][itemJ].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI - 1, itemJ: itemJ});
+              }
+
+              if ((hexagonGridType === 'even' && itemI % 2 === 1 || hexagonGridType === 'odd' && itemI % 2 === 0) && hexagonGridData[itemI - 1][itemJ + 1] && hexagonGridData[itemI - 1][itemJ + 1].selected && hexagonGridData[itemI - 1][itemJ + 1].group === null) {
+                hexagonGridData[itemI - 1][itemJ + 1].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI - 1, itemJ: itemJ + 1});
+              }
+            }
+
+            if (hexagonGridData[itemI + 1]) {
+              if ((hexagonGridType === 'even' && itemI % 2 === 0 || hexagonGridType === 'odd' && itemI % 2 === 1) && hexagonGridData[itemI + 1][itemJ] && hexagonGridData[itemI + 1][itemJ].selected && hexagonGridData[itemI + 1][itemJ].group === null) {
+                hexagonGridData[itemI + 1][itemJ].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI + 1, itemJ: itemJ});
+              }
+
+              if ((hexagonGridType === 'even' && itemI % 2 === 1 || hexagonGridType === 'odd' && itemI % 2 === 0) && hexagonGridData[itemI + 1][itemJ + 1] && hexagonGridData[itemI + 1][itemJ + 1].selected && hexagonGridData[itemI + 1][itemJ + 1].group === null) {
+                hexagonGridData[itemI + 1][itemJ + 1].group = currentGroup;
+                countCells++;
+                queue.push({itemI: itemI + 1, itemJ: itemJ + 1});
+              }
+            }
+
+            if (hexagonGridData[itemI][itemJ + 1] && hexagonGridData[itemI][itemJ + 1].selected && hexagonGridData[itemI][itemJ + 1].group === null) {
+              hexagonGridData[itemI][itemJ + 1].group = currentGroup;
+              countCells++;
+              queue.push({itemI: itemI, itemJ: itemJ + 1});
+            }
+
+            return countCells;
+          };
+
+          ReactDOM.render(
+            <App />,
+            rootElement
+          );
+        </script>
+    </body>
+</html>
